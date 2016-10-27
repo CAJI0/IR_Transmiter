@@ -1,25 +1,22 @@
 //*****************************************************************************
 //   Ultra-Low Power TV IR Remote Control Transmitter
 //
-//                MSP430F21x1
-//             -----------------
-//         /|\|              XIN|-
-//          | |                 |
-//          --|RST          XOUT|-
-//            |                 |
-//    Row 0 ->|P2.0         P2.3|--> IR LED Out
-//    Row 1 ->|P2.1             |
-//    Row 2 ->|P2.2             |
-//    Col 0 ->|P1.0             |
-//    Col 1 ->|P1.1             |
+//                          MSP430F21x1
+//                       -----------------
+//                   /|\|                 |
+//                    | |             P2.7|<- Dip Switch 1
+//                    --|RST          P2.6|<- Dip Switch 2
+//                      |                 |
+//        IR LED Out <--|P1.6         P2.5|-> Row 5
+//                      |             P2.4|-> Row 4
+//              Col 3 ->|P1.3         P2.3|-> Row 3
+//              Col 2 ->|P1.2         P2.2|-> Row 2
+//              Col 1 ->|P1.1         P2.1|-> Row 1
+//              Col 0 ->|P1.0         P2.0|-> Row 0
 //
 //
 //   SMCLK = DCO = 1MHz
 //
-//   N.Brenner
-//   Texas Instruments, Inc
-//   August 2005
-//   Built with IAR Embedded Workbench Version: 3.21A
 //*****************************************************************************
 // THIS PROGRAM IS PROVIDED "AS IS". TI MAKES NO WARRANTIES OR
 // REPRESENTATIONS, EITHER EXPRESS, IMPLIED OR STATUTORY,
@@ -82,16 +79,8 @@
 #define   RETRANSMIT  1
 #define   ENDTRANSMIT 0
 
-// Array for Key look-up Table
-/*const char KeyTab[6] = {
-  0x11,                                     // Key 0
-  0x21,                                     // Key 1
-  0x12,                                     // Key 2
-  0x22,                                     // Key 3
-  0x14,                                     // Key 4
-  0x24                                      // Key 5
-};*/
 
+// Table of pressed key codes
 const char KeyTab[24]= {
   0x10,
   0x11,
@@ -118,32 +107,33 @@ const char KeyTab[24]= {
   0x84,
   0x85
 };
+
 // Array for Function look-up Table
 const char FuncTab[24] = {
-  0x0C,                                     // Key 0 - pwr
-  0x0D,                                     // Key 1 - mute
-  0x20,                                     // Key 2 - channel up
-  0x10,                                     // Key 3 - volume up
-  0x21,                                     // Key 4 - channel down
-  0x11,                                     // Key 5 - volume down
-  0x30,
-  0x31,
-  0x32,
-  0x33,
-  0x34,
-  0x35,
-  0x36,
-  0x37,
-  0x38,
-  0x39,
+  0x01,                                     // Key 0 - 
+  0x02,                                     // Key 1 - 
+  0x03,                                     // Key 2 - 
+  0x04,                                     // Key 3 - 
+  0x05,                                     // Key 4 - 
+  0x06,                                     // Key 5 - 
+  0x11,
   0x12,
   0x13,
   0x14,
   0x15,
   0x16,
-  0x17,
-  0x18,
-  0x19
+  0x21,
+  0x22,
+  0x23,
+  0x24,
+  0x25,
+  0x26,
+  0x31,
+  0x32,
+  0x33,
+  0x34,
+  0x35,
+  0x36
 };
 
 unsigned int RowMask;
@@ -206,10 +196,9 @@ void main(void)
 void Initialize(void)
 {
   WDTCTL = WDTPW+WDTHOLD;                   // Stop watchdog timer
-  P2DIR = 0xFF;                             // All P2 outputs
- // P2SEL = 0x08;                             // P1.6 TA1 option
-  P1SEL |= BIT6;
-  P1DIR |= BIT6;
+  P2DIR = 0x3F;                             // P2.0 - P2.5 outputs, P2.6-P.7 inputs
+  P1SEL |= BIT6;                            // P1.6 PWM output
+  P1DIR |= BIT6;                            // P1.6 output
   P2OUT = 0;                                // Clear P2 outputs
   DCOCTL = CALDCO_1MHZ;                     // Set DCO for 1MHz using
   BCSCTL1 = CALBC1_1MHZ;                    // calibration registers
@@ -218,10 +207,10 @@ void Initialize(void)
 
 void SetForPress(void)
 {
-  P1DIR &= ~0x0F;                           // P1.0,1,2,3 inputs
-  P1OUT &= ~0x0F;                           // Clear P1 outputs, pull downs
-  P1REN |= 0x0F;                            // Enable resistors on P1.0,1
-  P2OUT |= 0x3F;                           // Enable keypad
+  P1DIR &= ~0x0F;                           // P1.0 - P1.3 inputs
+  P1OUT &= ~0x0F;                           // Clear P1.0 - P1.3 outputs, pull downs
+  P1REN |= 0x0F;                            // Enable resistors on P1.0-P1.3
+  P2OUT |= 0x3F;                            // Enable keypad
   P1IES &= ~0x0F;                           // L-to-H interrupts
   P1IFG = 0;                                // Clear any pending flags
   P1IE |= 0x0F;                             // Enable interrupts
@@ -271,7 +260,7 @@ void KeyLookup(void)
   unsigned int i;                           // Define counter variable
 
   KeyPressed = 99;                          // Dummy key value
-  for (i=0; i<24; i++) {                     // Loop through all keys
+  for (i=0; i<24; i++) {                    // Loop through all keys
     if (KeyTab[i] == KeyHex) {              // Table value = KeyHex?
       KeyPressed = i;                       // If so, that is the key number
     }
@@ -283,14 +272,14 @@ void KeyLookup(void)
 
 void SetupForRelease(void)
 {
-  P1DIR |= 0x0F;                            // Switch P1.0/1 to output, high
+  P1DIR |= 0x0F;                            // Switch P1.0 - P1.3 to output, high
   P1OUT |= 0x0F;                            // to reduce power consumption
   Trans_Flags |= HeldDown;                  // Button is pressed
 }
 
 void DetermineRelease(void)
 {
-  P1OUT &= ~0x0F;                           // Switch P1.0/1 to input with pull
+  P1OUT &= ~0x0F;                           // Switch P1.0 - P1.3 to input with pull
   P1DIR &= ~0x0F;                           // down resistor
   if (P1IN & 0x0F) {                        // Any key still pressed?
   	SetupForRelease();                  // If so, setup for release again
@@ -304,13 +293,49 @@ void Transmit(void)
   unsigned int i;                           // Define counter variable
 
   Command = FuncTab[KeyPressed];            // Get command code for key pressed
-  Command = Command + 0x3000;               // Add 2 start bits, and address 0
+  
+  //Command = Command + 0x3600;               // Add 2 start bits, 2 upper bits of address
+  // DIP Switch:      Address
+  // P1.7  P1.6
+  //  0     0           24
+  //  0     1           25
+  //  1     0           28
+  //  1     1           27
+  //Command += (P2IN && BIT6) << 6;          // Add bit0 of address      
+  //Command += ((P2IN & BIT7)&&(P2IN & BIT6)) << 7;  // Add bit1 of address  
+  //Command += ((P2IN & BIT7)&& !(P2IN & BIT6)) << 8;  // Add bit2 of address address 
+  
+  Command += Command + 0x3000;
+  
+  switch(P2IN & (BIT6+BIT7))
+  {
+    case 0x00:
+    {
+      Command += 0x0600;        // address = 24
+    }break;
+   
+  case 0x40:
+    {
+      Command += 0x0640;          // address = 25
+    }break;
+    
+  case 0x80:
+    {
+      Command += 0x0700;          // address = 28
+    }break;
+    
+  case 0xC0:
+    {
+      Command += 0x06C0;        // address = 27
+    }break;
+  }
+  
   if (Trans_Flags & Toggle) {               // Toggle bit?
     Command = Command + 0x0800;             // Add toggle bit
   }
   Command = Command << 2;                   // Shift the transmit packet twice
                                             // to begin with the start bit
-  //TACCR1 = 1;                               // CCR1 PWM Duty Cycle ~4%
+  //TACCR1 = 1;                             // CCR1 PWM Duty Cycle ~4%
   TACCR1 = 7;                               // CCR1 PWM Duty Cycle ~26%
   TACCTL0 = CCIE;                           // Enable CCR0 interrupt
   for (i=0; i<14; i++) {                    // Loop through all bits to send
@@ -367,7 +392,7 @@ void OutputHigh(unsigned int val)
 {
   unsigned int j;                           // Declare counter variable
   TACCTL1 = OUTMOD_7;                       // CCR1 reset/set
-  //TACCR0 = 26 - 1;                          // PWM Period ~ 38kHz
+  //TACCR0 = 26 - 1;                        // PWM Period ~ 38kHz
   TACCR0 = 25 - 1;                          // PWM Period ~ 40kHz
   TACTL = TASSEL1+TACLR;                    // SMCLK, Clear TA
   TACTL |= MC0;                             // Start TA in up mode
