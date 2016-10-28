@@ -202,6 +202,7 @@ void Initialize(void)
   P2OUT = 0;                                // Clear P2 outputs
   DCOCTL = CALDCO_1MHZ;                     // Set DCO for 1MHz using
   BCSCTL1 = CALBC1_1MHZ;                    // calibration registers
+  Trans_Flags = 0;                          // Clear trans flags
   _EINT();                                  // Enable interrupts
 }
 
@@ -211,11 +212,18 @@ void SetForPress(void)
   P1OUT &= ~0x0F;                           // Clear P1.0 - P1.3 outputs, pull downs
   P1REN |= 0x0F;                            // Enable resistors on P1.0-P1.3
   P2OUT |= 0x3F;                            // Enable keypad
+  
+  P2SEL &= ~(BIT7 + BIT6);
+  P2DIR &= ~(BIT7 + BIT6);
+  P2REN |= BIT7 + BIT6;
+  P2OUT &= ~(BIT7 + BIT6);
+  
   P1IES &= ~0x0F;                           // L-to-H interrupts
   P1IFG = 0;                                // Clear any pending flags
   P1IE |= 0x0F;                             // Enable interrupts
   Error_Flags = 0;                          // Clear error flags
-  Trans_Flags = 0;                          // Clear trans flags
+  Trans_Flags &= ~HeldDown;
+ // Trans_Flags = 0;                          // Clear trans flags
 }
 
 void Debounce(void)
@@ -305,7 +313,8 @@ void Transmit(void)
   //Command += ((P2IN & BIT7)&&(P2IN & BIT6)) << 7;  // Add bit1 of address  
   //Command += ((P2IN & BIT7)&& !(P2IN & BIT6)) << 8;  // Add bit2 of address address 
   
-  Command += Command + 0x3000;
+  Command +=  0x3000;
+  
   
   switch(P2IN & (BIT6+BIT7))
   {
@@ -371,7 +380,9 @@ unsigned int TestRetransmit(void)
     } else {                                // If not, return to main and
       TACCTL0 = 0;                          // Clear CCTL0 register
       TACCTL1 = 0;                          // Clear CCTL1 register
-      Trans_Flags &= ~Toggle;               // Clear the toggle bit
+    //  Trans_Flags &= ~Toggle;               // Clear the toggle bit
+      Trans_Flags ^= Toggle;                    // Toggle the toggle bit
+
       return ENDTRANSMIT;
     }
   }
@@ -385,7 +396,7 @@ void DelayToNextTransmit(void)
   TACTL |= MC0;                             // Start TA in up mode
   LPM0;                                     // Sleep during delay
   TACTL = TACLR;                            // Stop and clear TA
-  Trans_Flags ^= Toggle;                    // Toggle the toggle bit
+ // Trans_Flags ^= Toggle;                    // Toggle the toggle bit
 }
 
 void OutputHigh(unsigned int val)
